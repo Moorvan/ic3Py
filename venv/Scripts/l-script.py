@@ -1,0 +1,12 @@
+#!C:\Documents\study\chisel-riscv\pdfs\IC3\ic3Py\venv\Scripts\python.exe
+# EASY-INSTALL-ENTRY-SCRIPT: 'l==0.11.0','console_scripts','l'
+__requires__ = 'l==0.11.0'
+import re
+import sys
+from pkg_resources import load_entry_point
+
+if __name__ == '__main__':
+    sys.argv[0] = re.sub(r'(-script\.pyw?|\.exe)?$', '', sys.argv[0])
+    sys.exit(
+        load_entry_point('l==0.11.0', 'console_scripts', 'l')()
+    )
