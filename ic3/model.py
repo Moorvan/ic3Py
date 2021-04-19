@@ -4,13 +4,14 @@ from z3 import *
 
 
 class Header:
-    def __init__(self, max_idx: int, nin: int, nlatch: int, nout: int, nand: int, nbad: int):
+    def __init__(self, max_idx: int, nIn: int, nLatch: int, nOut: int, nAnd: int, nBad: int, nInvariant):
         self.max_var_index = max_idx
-        self.inputs = nin
-        self.latches = nlatch
-        self.outputs = nout
-        self.ands = nand
-        self.bads = nbad
+        self.inputs = nIn
+        self.latches = nLatch
+        self.outputs = nOut
+        self.ands = nAnd
+        self.bads = nBad
+        self.invariants = nInvariant
 
 
 class Latch:
@@ -43,8 +44,9 @@ def read_in(fileName: str):
     bads = list()
     latches = list()
     ands = list()
+    invariants = list()
 
-    HEADER_PATTERN = re.compile("aag (\d+) (\d+) (\d+) (\d+) (\d+)(?: (\d+))?\n")
+    HEADER_PATTERN = re.compile("aag (\d+) (\d+) (\d+) (\d+) (\d+)(?: (\d+))?(?: (\d+))?\n")
     IO_PATTERN = re.compile("(\d+)\n")
     LATCH_PATTERN = re.compile("(\d+) (\d+)(?: (\d+))?\n")
     AND_PATTERN = re.compile("(\d+) (\d+) (\d+)\n")
@@ -54,7 +56,7 @@ def read_in(fileName: str):
         cont = re.match(HEADER_PATTERN, head_line)
         if cont is None:
             print("Don't support constraint, fairness, justice property yet")
-            os._exit(1)
+            exit(1)
 
         header = Header(
             int(cont.group(1)),
@@ -62,7 +64,8 @@ def read_in(fileName: str):
             int(cont.group(3)),
             int(cont.group(4)),
             int(cont.group(5)),
-            int(cont.group(6)) if cont.group(6) is not None else 0
+            int(cont.group(6)) if cont.group(6) is not None else 0,
+            int(cont.group(7)) if cont.group(7) is not None else 0
         )
 
         input_num = header.inputs
@@ -70,7 +73,7 @@ def read_in(fileName: str):
         bad_num = header.bads
         latch_num = header.latches
         and_num = header.ands
-        print("and_num:" + str(and_num))
+        invariant_num = header.invariants
 
         for line in f.readlines():
             if input_num > 0:
@@ -105,6 +108,13 @@ def read_in(fileName: str):
                     bads.append(h.group(1))
                     print(str(h.group(1)))
                     bad_num -= 1
+            elif invariant_num > 0:
+                h = re.match(IO_PATTERN, line)
+                if h:
+                    print("invariant node")
+                    invariants.append(h.group(1))
+                    print(str(h.group(1)))
+                    invariant_num -= 1
             elif and_num > 0:
                 h = re.match(AND_PATTERN, line)
                 if h:
@@ -112,7 +122,7 @@ def read_in(fileName: str):
                     print(str(h.groups()))
                     ands.append(AND(h.group(1), h.group(2), h.group(3)))
                     and_num -= 1
-        return inputs, outputs, bads, latches, ands
+        return inputs, latches, outputs, ands, bads, invariants
 
 
 class Model:
@@ -125,7 +135,7 @@ class Model:
         self.post = True
 
     def parse(self, fileName):
-        i, o, b, l, a = read_in(fileName)
+        i, l, o, a, b, c = read_in(fileName)
 
         # input node
         inp = dict()
@@ -167,7 +177,7 @@ class Model:
                     rs0 = Not(ands[v])
                 else:
                     print("Error in AND definition, in node " + v)
-                    os._exit(1)
+                    exit(1)
             else:
                 v = it.rhs0
                 if v in inp.keys():
@@ -178,7 +188,7 @@ class Model:
                     rs0 = ands[v]
                 else:
                     print("Error in AND definition, in node " + v)
-                    os._exit(1)
+                    exit(1)
 
             if it.rhs1 == "1":
                 rs1 = True
@@ -194,7 +204,7 @@ class Model:
                     rs1 = Not(ands[v])
                 else:
                     print("Error in AND definition, in node " + v)
-                    os._exit(1)
+                    exit(1)
             else:
                 v = it.rhs1
                 if v in inp.keys():
@@ -205,7 +215,7 @@ class Model:
                     rs1 = ands[v]
                 else:
                     print("Error in AND definition, in node " + v)
-                    os._exit(1)
+                    exit(1)
 
             ands[it.lhs] = And(rs0, rs1)
 
@@ -235,7 +245,7 @@ class Model:
                     trans_items.append(pvs[it.var] == ands[v])
                 else:
                     print("Error in transition relation")
-                    os._exit(1)
+                    exit(1)
             else:
                 v = str(int(it.next) - 1)
                 if v in inp.keys():
@@ -246,49 +256,100 @@ class Model:
                     trans_items.append(pvs[it.var] == Not(ands[v]))
                 else:
                     print("Error in transition relation")
-                    os._exit(1)
+                    exit(1)
         self.trans = simplify(And(trans_items))
 
         # postulate
-        bad_var = None
-        if len(o) < 1:
-            if len(b) == 0:
-                print("Didn't specify a property")
-                os._exit(1)
-            elif len(b) > 1:
-                print("Sorry, only handle one property")
-                os._exit(1)
-            else:
-                bad_var = b[0]
-        else:
-            print("Consider the output as bad property")
-            bad_var = o[0]
-        print(bad_var)
-        if bad_var is not None:
-            tmp = int(bad_var)
+        property_items = list()
+        # bads
+        for it in b:
+            tmp = int(it)
             if tmp & 1 == 0:
-                if bad_var in inp.keys():
-                    self.post = Not(inp[bad_var])
-                elif bad_var in vs.keys():
-                    self.post = Not(vs[bad_var])
-                elif bad_var in ands.keys():
-                    self.post = Not(ands[bad_var])
+                if it in inp.keys():
+                    property_items.append(Not(inp[it]))
+                elif it in vs.keys():
+                    property_items.append(Not(vs[it]))
+                elif it in ands.keys():
+                    property_items.append(Not(ands[it]))
                 else:
                     print("Error in property definition")
-                    os._exit(1)
+                    exit(1)
             else:
-                bad_var = str(tmp - 1)
-                if bad_var in inp.keys():
-                    self.post = inp[bad_var]
-                elif bad_var in vs.keys():
-                    self.post = vs[bad_var]
-                elif bad_var in ands.keys():
-                    self.post = ands[bad_var]
+                it = str(int(it) - 1)
+                if it in inp.keys():
+                    property_items.append(inp[it])
+                elif it in vs.keys():
+                    property_items.append(vs[it])
+                elif it in ands.keys():
+                    property_items.append(ands[it])
                 else:
                     print("Error in property definition")
-                    os._exit(1)
+                    exit(1)
+        # invariants
+        for it in c:
+            tmp = int(it)
+            if tmp & 1 == 0:
+                if it in inp.keys():
+                    property_items.append(inp[it])
+                elif it in vs.keys():
+                    property_items.append(vs[it])
+                elif it in ands.keys():
+                    property_items.append(ands[it])
+                else:
+                    print("Error in property definition")
+                    exit(1)
+            else:
+                it = str(int(it) - 1)
+                if it in inp.keys():
+                    property_items.append(inp[it])
+                elif it in vs.keys():
+                    property_items.append(vs[it])
+                elif it in ands.keys():
+                    property_items.append(ands[it])
+                else:
+                    print("Error in property definition")
+                    exit(1)
+        self.post = simplify(And(property_items))
+        # bad_var = None
+        # if len(o) < 1:
+        #     if len(b) == 0:
+        #         print("Didn't specify a property")
+        #         exit(1)
+        #     elif len(b) > 1:
+        #         print("Sorry, only handle one property")
+        #         exit(1)
+        #     else:
+        #         bad_var = b[0]
+        # else:
+        #     print("Consider the output as bad property")
+        #     bad_var = o[0]
+        # print(bad_var)
+        # if bad_var is not None:
+        #     tmp = int(bad_var)
+        #     if tmp & 1 == 0:
+        #         if bad_var in inp.keys():
+        #             self.post = Not(inp[bad_var])
+        #         elif bad_var in vs.keys():
+        #             self.post = Not(vs[bad_var])
+        #         elif bad_var in ands.keys():
+        #             self.post = Not(ands[bad_var])
+        #         else:
+        #             print("Error in property definition")
+        #             exit(1)
+        #     else:
+        #         bad_var = str(tmp - 1)
+        #         if bad_var in inp.keys():
+        #             self.post = inp[bad_var]
+        #         elif bad_var in vs.keys():
+        #             self.post = vs[bad_var]
+        #         elif bad_var in ands.keys():
+        #             self.post = ands[bad_var]
+        #         else:
+        #             print("Error in property definition")
+        #             exit(1)
         return self.inputs, self.vars, self.primed_vars, self.init, self.trans, self.post
 
 
 if __name__ == '__main__':
-    print(bool("i" + "1"))
+    print("hello world")
+    exit(1)
