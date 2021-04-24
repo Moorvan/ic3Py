@@ -1,20 +1,6 @@
 from z3 import *
 
-
-# conjunction of literals.
-class tCube:
-    # make a tcube object assosciated with frame t.
-    def __init__(self, model, lMap, t=None):
-        self.t = t
-        no_primes = [l for l in model if '\'' not in str(l)]
-        no_input = [l for l in no_primes if 'i' not in str(l)]
-        self.cubeLiterals = [lMap[str(l)] == model[l] for l in no_input]
-
-    def cube(self):
-        return And(self.cubeLiterals)
-
-    def __repr__(self):
-        return str(self.t) + ": " + str(sorted(self.cubeLiterals, key=str))
+from ic3.model import tCube
 
 
 class PDR:
@@ -35,6 +21,7 @@ class PDR:
         while True:
             c = self.getBadCube()
             if c is not None:
+                print("get bad cube!")
                 trace = self.recBlockCube(c)
                 if trace is not None:
                     print("Found trace ending in bad state:")
@@ -42,33 +29,39 @@ class PDR:
                         print(f)
                     return False
             else:
-                inv = self.checkForInduction()
-                if inv is not None:
-                    print("Fond inductive invariant:" + str(simplify(inv)))
-                    return True
+                # inv = self.checkForInduction()
+                # if inv is not None:
+                #     print("Fond inductive invariant:" + str(inv))
+                #     return True
                 print("Did not find invariant, adding frame" + str(len(self.R)))
-                self.R.append(True)
+                self.R.append(tCube(len(self.R)))
                 for index, fi in enumerate(self.R):
-                    for c in fi:
+                    if index == len(self.R) - 1:
+                        break
+                    for c in fi.cubeLiterals:
                         s = Solver()
-                        s.add(fi)
+                        s.add(fi.cube())
                         s.add(c)
-                        s.add(self.trans)
+                        s.add(self.trans.cube())
                         s.add(Not(substitute(c, *self.primeMap)))
                         if s.check() == unsat:
-                            self.R[index + 1].append(c)
+                            self.R[index + 1].add(c)
+                    if self.checkForInduction(fi):
+                        print("Fond inductive invariant:" + str(fi))
+                        return True
 
-    def checkForInduction(self):
-        for frame in self.R:
-            s = Solver()
-            s.add(self.trans)
-            s.add(frame)
-            s.add(Not(substitute(frame, *self.primeMap)))
-            if s.check() == unsat:
-                return frame
-        return None
+    def checkForInduction(self, frame):
+        print("check for Induction now...")
+        s = Solver()
+        s.add(self.trans.cube())
+        s.add(frame.cube())
+        s.add(Not(substitute(frame.cube(), *self.primeMap)))
+        if s.check() == unsat:
+            return True
+        return False
 
     def recBlockCube(self, s0):
+        print("recBlockCube now...")
         Q = [s0]
         while len(Q) > 0:
             s = Q[-1]
@@ -78,29 +71,37 @@ class PDR:
             if z is None:
                 Q.pop()
                 for i in range(1, s.t + 1):
-                    self.R[i] = And(self.R[i], Not(s.cube()))
+                    self.R[i].add(Not(s.cube()))
             else:
                 Q.append(z)
         return None
+
+    def generalize_CTG(self, c: tCube):
+        pass
 
     # tcube is bad state
     def solveRelative(self, tcube):
         cubePrime = substitute(tcube.cube(), *self.primeMap)
         s = Solver()
-        s.add(self.R[tcube.t - 1])
-        s.add(self.trans)
+        s.add(self.R[tcube.t - 1].cube())
+        s.add(self.trans.cube())
         s.add(cubePrime)
         if s.check() == sat:
             model = s.model()
-            return tCube(model, self.lMap, tcube.t - 1)
+            c = tCube(tcube.t - 1)
+            c.addModel(model, self.lMap)
+            return c
         return None
 
     def getBadCube(self):
-        model = And(Not(self.post), self.R[-1])
+        print("seek for bad cube...")
+        model = And(Not(self.post.cube()), self.R[-1].cube())
         s = Solver()
         s.add(model)
         if s.check() == sat:
-            return tCube(s.model(), self.lMap, len(self.R) - 1)
+            res = tCube(len(self.R) - 1)
+            res.addModel(self.lMap, s.model())
+            return res
         else:
             return None
 

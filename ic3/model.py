@@ -1,6 +1,30 @@
-import os
 import re
 from z3 import *
+
+
+# conjunction of literals.
+class tCube:
+    # make a tcube object assosciated with frame t.
+    def __init__(self, t=0):
+        self.t = t
+        self.cubeLiterals = []
+
+    def addModel(self, lMap, model):
+        no_primes = [l for l in model if '\'' not in str(l)]
+        no_input = [l for l in no_primes if 'i' not in str(l)]
+        self.cubeLiterals = [lMap[str(l)] == model[l] for l in no_input]
+
+    def addAnds(self, ms):
+        self.cubeLiterals = ms
+
+    def add(self, m):
+        self.cubeLiterals.append(m)
+
+    def cube(self):
+        return simplify(And(self.cubeLiterals))
+
+    def __repr__(self):
+        return str(self.t) + ": " + str(sorted(self.cubeLiterals, key=str))
 
 
 class Header:
@@ -130,9 +154,9 @@ class Model:
         self.inputs = []
         self.vars = []
         self.primed_vars = []
-        self.trans = True
-        self.init = True
-        self.post = True
+        self.trans = tCube()
+        self.init = tCube()
+        self.post = tCube()
 
     def parse(self, fileName):
         i, l, o, a, b, c = read_in(fileName)
@@ -226,7 +250,7 @@ class Model:
                 inits_var.append(Not(vs[it.var]))
             elif it.init == "1":
                 inits_var.append(vs[it.var])
-        self.init = And(inits_var)
+        self.init.addAnds(inits_var)
 
         # transition. trans_items: asserts.
         trans_items = list()
@@ -257,7 +281,7 @@ class Model:
                 else:
                     print("Error in transition relation")
                     exit(1)
-        self.trans = simplify(And(trans_items))
+        self.trans.addAnds(trans_items)
 
         # postulate
         property_items = list()
@@ -309,7 +333,7 @@ class Model:
                 else:
                     print("Error in property definition")
                     exit(1)
-        self.post = simplify(And(property_items))
+        self.post.addAnds(property_items)
         # bad_var = None
         # if len(o) < 1:
         #     if len(b) == 0:
