@@ -122,7 +122,7 @@ class PDR:
                 Q.pop()
                 ns = tClause(s.t)
                 ns.defFromNotCube(s)
-                self.generalize_iter(ns)
+                # self.generalize_iter(ns)
                 for i in range(1, s.t + 1):
                     self.R[i].add(ns.clause())
             else:
