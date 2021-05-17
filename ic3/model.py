@@ -1,30 +1,7 @@
 import re
 from z3 import *
 
-
-# conjunction of literals.
-class tCube:
-    # make a tcube object assosciated with frame t.
-    def __init__(self, t=0):
-        self.t = t
-        self.cubeLiterals = []
-
-    def addModel(self, lMap, model):
-        no_primes = [l for l in model if '\'' not in str(l)]
-        no_input = [l for l in no_primes if 'i' not in str(l)]
-        self.cubeLiterals = [lMap[str(l)] == model[l] for l in no_input]
-
-    def addAnds(self, ms):
-        self.cubeLiterals = ms
-
-    def add(self, m):
-        self.cubeLiterals.append(m)
-
-    def cube(self):
-        return simplify(And(self.cubeLiterals))
-
-    def __repr__(self):
-        return str(self.t) + ": " + str(sorted(self.cubeLiterals, key=str))
+from ic3.pdr import tCube
 
 
 class Header:
@@ -69,11 +46,13 @@ def read_in(fileName: str):
     latches = list()
     ands = list()
     invariants = list()
+    annotations = list()
 
     HEADER_PATTERN = re.compile("aag (\d+) (\d+) (\d+) (\d+) (\d+)(?: (\d+))?(?: (\d+))?\n")
     IO_PATTERN = re.compile("(\d+)\n")
     LATCH_PATTERN = re.compile("(\d+) (\d+)(?: (\d+))?\n")
     AND_PATTERN = re.compile("(\d+) (\d+) (\d+)\n")
+    ANNOTATION_PATTERN = re.compile("\S+ (\S+)\n")
 
     with open(fileName, 'r') as f:
         head_line = f.readline()
@@ -103,50 +82,54 @@ def read_in(fileName: str):
             if input_num > 0:
                 h = re.match(IO_PATTERN, line)
                 if h:
-                    print("input node")
+                    # print("input node")
                     inputs.append(h.group(1))
-                    print(str(h.group(1)))
+                    # print(str(h.group(1)))
                     input_num -= 1
             elif latch_num > 0:
                 h = re.match(LATCH_PATTERN, line)
                 if h:
-                    print("latches node")
+                    # print("latches node")
                     if h.group(3) is None:
-                        print(h.groups())
+                        # print(h.groups())
                         latches.append(Latch(h.group(1), h.group(2), "0"))
                     else:
-                        print(h.groups())
+                        # print(h.groups())
                         latches.append(Latch(h.group(1), h.group(2), h.group(3)))
                     latch_num -= 1
             elif output_num > 0:
                 h = re.match(IO_PATTERN, line)
                 if h:
-                    print("output node")
+                    # print("output node")
                     outputs.append(h.group(1))
-                    print(str(h.group(1)))
+                    # print(str(h.group(1)))
                     output_num -= 1
             elif bad_num > 0:
                 h = re.match(IO_PATTERN, line)
                 if h:
-                    print("bad node")
+                    # print("bad node")
                     bads.append(h.group(1))
-                    print(str(h.group(1)))
+                    # print(str(h.group(1)))
                     bad_num -= 1
             elif invariant_num > 0:
                 h = re.match(IO_PATTERN, line)
                 if h:
-                    print("invariant node")
+                    # print("invariant node")
                     invariants.append(h.group(1))
-                    print(str(h.group(1)))
+                    # print(str(h.group(1)))
                     invariant_num -= 1
             elif and_num > 0:
                 h = re.match(AND_PATTERN, line)
                 if h:
-                    print("and node")
-                    print(str(h.groups()))
+                    # print("and node")
+                    # print(str(h.groups()))
                     ands.append(AND(h.group(1), h.group(2), h.group(3)))
                     and_num -= 1
-        return inputs, latches, outputs, ands, bads, invariants
+            else:
+                h = re.match(ANNOTATION_PATTERN, line)
+                if h:
+                    annotations.append(h.group(1))
+        return inputs, latches, outputs, ands, bads, invariants, annotations
 
 
 class Model:
@@ -159,27 +142,38 @@ class Model:
         self.post = tCube()
 
     def parse(self, fileName):
-        i, l, o, a, b, c = read_in(fileName)
+        i, l, o, a, b, c, annotations = read_in(fileName)
 
+        ann_i = 0
         # input node
         inp = dict()
         self.inputs = list()
         for it in i:
-            inp[it] = Bool("i" + it)
+            if ann_i < len(annotations):
+                name = "i" + it + "[" + annotations[ann_i] + "]"
+            else:
+                name = "i" + it
+            ann_i += 1
+            inp[it] = Bool(name)
             self.inputs.append(inp[it])
 
         # vars of latch
         vs = dict()
         self.vars = list()
         for it in l:
-            vs[it.var] = Bool("v" + it.var)
+            if ann_i < len(annotations):
+                name = "v" + it.var + "[" + annotations[ann_i] + "]"
+            else:
+                name = "v" + it.var
+            ann_i += 1
+            vs[it.var] = Bool(name)
             self.vars.append(vs[it.var])
 
         # vars' of latch
         pvs = dict()
         self.primed_vars = list()
         for it in l:
-            pvs[it.var] = Bool("v" + it.var + '\'')
+            pvs[it.var] = Bool(str(vs[it.var]) + '\'')
             self.primed_vars.append(pvs[it.var])
 
         # and gate node => And(and1, and2)
@@ -283,6 +277,9 @@ class Model:
                     exit(1)
         self.trans.addAnds(trans_items)
 
+        # print("trans:")
+        # print(self.trans.cube())
+
         # postulate
         property_items = list()
         # bads
@@ -334,46 +331,11 @@ class Model:
                     print("Error in property definition")
                     exit(1)
         self.post.addAnds(property_items)
-        # bad_var = None
-        # if len(o) < 1:
-        #     if len(b) == 0:
-        #         print("Didn't specify a property")
-        #         exit(1)
-        #     elif len(b) > 1:
-        #         print("Sorry, only handle one property")
-        #         exit(1)
-        #     else:
-        #         bad_var = b[0]
-        # else:
-        #     print("Consider the output as bad property")
-        #     bad_var = o[0]
-        # print(bad_var)
-        # if bad_var is not None:
-        #     tmp = int(bad_var)
-        #     if tmp & 1 == 0:
-        #         if bad_var in inp.keys():
-        #             self.post = Not(inp[bad_var])
-        #         elif bad_var in vs.keys():
-        #             self.post = Not(vs[bad_var])
-        #         elif bad_var in ands.keys():
-        #             self.post = Not(ands[bad_var])
-        #         else:
-        #             print("Error in property definition")
-        #             exit(1)
-        #     else:
-        #         bad_var = str(tmp - 1)
-        #         if bad_var in inp.keys():
-        #             self.post = inp[bad_var]
-        #         elif bad_var in vs.keys():
-        #             self.post = vs[bad_var]
-        #         elif bad_var in ands.keys():
-        #             self.post = ands[bad_var]
-        #         else:
-        #             print("Error in property definition")
-        #             exit(1)
         return self.inputs, self.vars, self.primed_vars, self.init, self.trans, self.post
 
 
 if __name__ == '__main__':
-    print("hello world")
-    exit(1)
+    a = tClause(0)
+    a.add(Bool("a"))
+    a.add(Bool("c"))
+    print(a.clause())

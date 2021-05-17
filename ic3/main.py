@@ -45,7 +45,7 @@ if __name__ == '__main__':
                 m = ic3.model.Model()
                 solver = ic3.pdr.PDR(*m.parse(os.path.join(root, name)))
 
-                if not run_with_limited_time(solver.run(), args.m):
+                if not run_with_limited_time(solver.run, args.m):
                     print("Time Out")
                 else:
                     print("Done in time")

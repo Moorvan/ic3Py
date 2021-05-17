@@ -1,3 +1,5 @@
+import re
+
 from z3 import *
 
 
@@ -30,5 +32,60 @@ def s2():
         print("unsat")
 
 
+def z3ToCNF():
+    x = Bool('x')
+    y = Bool('y')
+    z = Bool('z')
+    s = Or(And(x, y), z)
+    g = Goal()
+    g.add(s)
+    # describe_tactics()
+    t = Tactic('tseitin-cnf')
+    print(t(g))
+    s = Solver()
+    s.add(t(g)[0])
+
+
+def Mutual():
+    # Try:n[i] == state.T
+    # Crit:And(n[i] == state.C,Not(x))
+    # Exit:n[i]==state.E
+    # Idle:And(n[i]==state.I,x)
+    state = Datatype('state')
+    state.declare('I')
+    state.declare('T')
+    state.declare('C')
+    state.declare('E')
+    state = state.create()
+    n = Array('n', IntSort(), state)
+    x = Bool('x')
+    i = Int('i')
+    j = Int('j')
+    k = Int('k')
+    np = Array('n\'', IntSort(), state)
+    xp = Bool('x\'')
+    ip = Int('i\'')
+    jp = Int('j\'')
+    kp = Int('k\'')
+    variables = [i, j, k, x, n]
+    primes = [ip, jp, kp, xp, np]
+    init = And(n[i] == state.I, n[j] == state.I, x)
+    # trans = Or(Implies(And(n[i] == state.I, x), np[ip] == state.T), Implies(And(n[j] == state.I, x), np[jp] ==
+    # state.T), Implies(And(n[k] == state.I, x), np[kp] == state.T), Implies(And(n[i] == state.T, x), And(np[ip] ==
+    # state.C, xp == Not(x))), Implies(And(n[j] == state.T, x), And(np[jp] == state.C, xp == Not(x))), Implies(And(n[
+    # k] == state.T, x), And(n[k] == state.C, xp == Not(x))), Implies(n[i] == state.C, np[ip] == state.E),
+    # Implies(n[j] == state.C, np[jp] == state.E), Implies(n[k] == state.C, np[kp] == state.E), Implies(n[i] ==
+    # state.E, And(np[ip] == state.I, xp == x)), Implies(n[j] == state.E, And(np[jp] == state.I, xp == x)),
+    # Implies(n[k] == state.E, And(np[kp] == state.I, xp == x)))
+    trans = And(np[ip] == state.C, xp == Not(x))
+    post = Implies(n[i] == state.C, n[j] != state.C)
+    return variables, primes, init, trans, post
+
+
 if __name__ == '__main__':
-    s1()
+    a = Array('a', IntSort(), BoolSort())
+    i = Int('i')
+    v = Bool('v')
+    a = Store(a, i, v)
+    prove(a[i] == v)
+
