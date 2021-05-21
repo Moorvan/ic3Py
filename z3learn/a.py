@@ -81,11 +81,15 @@ def Mutual():
     post = Implies(n[i] == state.C, n[j] != state.C)
     return variables, primes, init, trans, post
 
+class Car:
+    def __init__(self, a: int):
+        self.ns = a
+
+def add(c: Car):
+    c = Car(10)
 
 if __name__ == '__main__':
-    a = Array('a', IntSort(), BoolSort())
-    i = Int('i')
-    v = Bool('v')
-    a = Store(a, i, v)
-    prove(a[i] == v)
+    a = Car(12)
+    add(a)
+    print(a.ns)
 

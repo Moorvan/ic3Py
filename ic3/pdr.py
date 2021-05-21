@@ -22,6 +22,17 @@ class tCube:
         t = Tactic('tseitin-cnf')
         for c in t(g)[0]:
             self.cubeLiterals.append(c)
+        if len(t(g)[0]) == 0:
+            self.cubeLiterals.append(True)
+
+    def delete(self, i: int):
+        res = tCube(self.t)
+        for it in range(len(self.cubeLiterals)):
+            if it == i:
+                res.add(True)
+                continue
+            res.add(self.cubeLiterals[it])
+        return res
 
     def cube(self):
         return simplify(And(self.cubeLiterals))
@@ -50,7 +61,7 @@ class tClause:
         for it in range(len(self.clauseLiterals)):
             if it == i:
                 continue
-            res.add(self.clauseLiterals[i])
+            res.add(self.clauseLiterals[it])
         return res
 
     def __repr__(self):
@@ -63,7 +74,8 @@ class PDR:
         self.init = init
         self.trans = trans
         self.literals = literals
-        self.lMap = {str(l): l for l in self.literals}
+        self.items = self.primary_inputs + self.literals
+        self.lMap = {str(l): l for l in self.items}
         self.post = post
         self.R = list()
         self.primeMap = [(literals[i], primes[i]) for i in range(len(literals))]
@@ -92,10 +104,9 @@ class PDR:
                         s = Solver()
                         s.add(fi.cube())
                         s.add(self.trans.cube())
-                        s.add(Not(substitute(c, *self.primeMap)))
+                        s.add(Not(substitute(c, self.primeMap)))
                         if s.check() == unsat:
                             self.R[index + 1].add(c)
-
                     if self.checkForInduction(fi):
                         print("Fond inductive invariant:\n" + str(fi.cube()))
                         return True
@@ -110,7 +121,7 @@ class PDR:
             return True
         return False
 
-    def recBlockCube(self, s0):
+    def recBlockCube(self, s0: tCube):
         print("recBlockCube now...")
         Q = [s0]
         while len(Q) > 0:
@@ -120,14 +131,41 @@ class PDR:
             z = self.solveRelative(s)
             if z is None:
                 Q.pop()
-                ns = tClause(s.t)
-                ns.defFromNotCube(s)
-                # self.generalize_iter(ns)
+                s = self.MIC(s)
                 for i in range(1, s.t + 1):
-                    self.R[i].add(ns.clause())
+                    self.R[i].add(Not(s.cube()))
             else:
                 Q.append(z)
         return None
+
+    def MIC(self, q: tCube):
+        i = 0
+        while True:
+            if i < len(q.cubeLiterals) - 1:
+                i = i + 1
+            else:
+                break
+            q1 = q.delete(i)
+            if self.down(q1):
+                q = q1
+        return q
+
+    def down(self, q: tCube):
+        while True:
+            s = Solver()
+            s.push()
+            s.add(And(self.R[0].cube(), Not(q.cube())))
+            if unsat == s.check():
+                return False
+            s.pop()
+            s.push()
+            s.add(And(self.R[q.t].cube(), Not(q.cube()), self.trans.cube(),
+                      substitute(q.cube(), self.primeMap)))  # Fi and not(q) and T and q'
+            if unsat == s.check():
+                return True
+            # q.addModel(self.lMap, s.model())
+            # s.pop()
+            return False
 
     def generalize_iter(self, c: tClause):
         done = False
@@ -157,7 +195,19 @@ class PDR:
                     s.pop()
                     s.push()
                     s.add(And(cc.clause(), self.R[0].cube()))
+                    print(1)
+                    s0 = Solver()
+                    s0.add(Or(cc.clause(), g.clause()))
+                    s0.add(self.R[0].cube())
+                    if unsat == s0.check():
+                        print("Yyyyys")
+                        exit(1)
+                    else:
+                        print("Nooo")
+                        exit(1)
+
                     while s.check() == sat:
+                        print(2)
                         s1 = Solver()
                         s1.push()
                         for l in g.clauseLiterals:
@@ -227,29 +277,24 @@ class PDR:
                 return False
             else:
                 pass
-                # s = self.get_predecessor(c.t, Not(substitute(c, *self.primeMap)))
+                # s = self.get_predecessor(c.t, Not(substitute(c, *self.primeMap))
 
-    def get_predecessor(self, i: int, c: tCube):
+    def get_predecessor(self, c: tCube) -> tCube:
         s = Solver()
-        s.push()
-        s.add(And(self.R[i - 1].cube(), self.trans.cube(), Not(c.cube()), substitute(c, *self.primeMap)))
+        s.add(And(self.R[c.t - 1].cube(), self.trans.cube(), Not(c.cube()), substitute(c.cube(), self.primeMap)))
         assert sat == s.check()
-        m = s.model()
-        inputs = [self.lMap[str(l)] == m[l] for l in m if 'i' in str(l)]  # primary inputs
-        p = [self.lMap[str(l)] == m[l] for l in m if 'v' in str(l)]  # state variables
-        for iter in range(1, 5):
-            s.pop()
-            s.push()
-            s.add(And(self.trans.cube(), And(inputs), Not(substitute(s, *self.primeMap))), Not(And(p)))
-            assert s.check() == sat
-            c = tCube()
-            while s.check() == sat:
-                t0 = tCube(c.t)
-                t0.addModel(self.lMap, s.model())
-                c.add(t0)
-                s.add(Not(s.model()))
-            p = s
-        return p
+        model = s.model()
+        c0 = tCube(c.t - 1)
+        inputs = [self.lMap[str(l)] == model[l] for l in model if str(l)[0] == 'i']
+        p = [self.lMap[str(l)] == model[l] for l in model if str(l)[0] == 'v']
+        c0.addAnds(p)
+        return c0
+        # for iter in range(0, max_iter):
+        #     s0 = Solver()
+        #     s0.add(And(self.trans.cube(), inputs, substitute(c, self.primeMap), p))
+        #     ms = tCube()
+        #     while sat == s0.check():
+        #         m = s0.model()
 
     # tcube is bad state
     def solveRelative(self, tcube):
@@ -257,6 +302,7 @@ class PDR:
         s = Solver()
         s.add(self.R[tcube.t - 1].cube())
         s.add(self.trans.cube())
+        s.add(Not(tcube.cube()))
         s.add(cubePrime)
         if s.check() == sat:
             model = s.model()
@@ -272,11 +318,11 @@ class PDR:
         s.add(model)
         if s.check() == sat:
             res = tCube(len(self.R) - 1)
-            # print(s.model())
             res.addModel(self.lMap, s.model())
-            # print("Find Bad Cube:")
-            # print(res.cube())
-            # print("END.")
             return res
         else:
             return None
+
+
+if __name__ == '__main__':
+    pass

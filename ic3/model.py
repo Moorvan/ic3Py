@@ -335,7 +335,4 @@ class Model:
 
 
 if __name__ == '__main__':
-    a = tClause(0)
-    a.add(Bool("a"))
-    a.add(Bool("c"))
-    print(a.clause())
+    pass
