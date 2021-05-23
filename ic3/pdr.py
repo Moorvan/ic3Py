@@ -91,13 +91,16 @@ class PDR:
         while True:
             c = self.getBadCube()
             if c is not None:
-                print("get bad cube!")
+                # print("get bad cube!")
                 trace = self.recBlockCube(c)
                 if trace is not None:
                     print("Found trace ending in bad state:")
                     for f in trace:
                         print(f)
                     return False
+                print("recBlockCube Ok! F:")
+                for i in self.frames:
+                    print(i)
             else:
                 print("Adding frame " + str(len(self.frames)) + "...")
                 self.frames.append(tCube(len(self.frames)))
@@ -114,6 +117,8 @@ class PDR:
                     if self.checkForInduction(fi):
                         print("Fond inductive invariant:\n" + str(fi.cube()))
                         return True
+                print("New Frame " + str(len(self.frames) - 1) + ": ")
+                print(self.frames[-1].cube())
 
     def checkForInduction(self, frame):
         print("check for Induction now...")
@@ -224,6 +229,8 @@ class PDR:
         if s.check() == sat:
             res = tCube(len(self.frames) - 1)
             res.addModel(self.lMap, s.model())  # res = sat_model
+            print("get bad cube:")
+            print(res.cube())
             return res
         else:
             return None
