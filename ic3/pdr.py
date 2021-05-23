@@ -8,23 +8,27 @@ class tCube:
         self.t = t
         self.cubeLiterals = list()
 
+    # 解析 sat 求解出的 model, 并将其加入到当前 tCube 中
     def addModel(self, lMap, model):
         no_primes = [l for l in model if str(l)[-1] != '\'']
         no_input = [l for l in no_primes if str(l)[0] != 'i']
         self.add(simplify(And([lMap[str(l)] == model[l] for l in no_input])))
 
+    # 扩增 CNF 式
     def addAnds(self, ms):
         self.cubeLiterals.extend(ms)
 
+    # 增加一个公式到当前 tCube() 中
     def add(self, m):
         g = Goal()
         g.add(m)
-        t = Tactic('tseitin-cnf')
+        t = Tactic('tseitin-cnf')  # 转化得到该公式的 CNF 范式
         for c in t(g)[0]:
             self.cubeLiterals.append(c)
         if len(t(g)[0]) == 0:
             self.cubeLiterals.append(True)
 
+    # 删除第 i 个元素，并返回 tCube
     def delete(self, i: int):
         res = tCube(self.t)
         for it in range(len(self.cubeLiterals)):
