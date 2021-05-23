@@ -81,18 +81,17 @@ class PDR:
         self.items = self.primary_inputs + self.literals
         self.lMap = {str(l): l for l in self.items}
         self.post = post
-        self.R = list()
+        self.frames = list()
         self.primeMap = [(literals[i], primes[i]) for i in range(len(literals))]
 
     def run(self):
-        self.R = list()
-        self.R.append(self.init)
+        self.frames = list()
+        self.frames.append(self.init)
 
         while True:
             c = self.getBadCube()
             if c is not None:
                 print("get bad cube!")
-                print(c)
                 trace = self.recBlockCube(c)
                 if trace is not None:
                     print("Found trace ending in bad state:")
@@ -100,10 +99,10 @@ class PDR:
                         print(f)
                     return False
             else:
-                print("Adding frame " + str(len(self.R)) + "...")
-                self.R.append(tCube(len(self.R)))
-                for index, fi in enumerate(self.R):
-                    if index == len(self.R) - 1:
+                print("Adding frame " + str(len(self.frames)) + "...")
+                self.frames.append(tCube(len(self.frames)))
+                for index, fi in enumerate(self.frames):
+                    if index == len(self.frames) - 1:
                         break
                     for c in fi.cubeLiterals:
                         s = Solver()
@@ -111,7 +110,7 @@ class PDR:
                         s.add(self.trans.cube())
                         s.add(Not(substitute(c, self.primeMap)))  # F[i] and T and Not(c)'
                         if s.check() == unsat:
-                            self.R[index + 1].add(c)
+                            self.frames[index + 1].add(c)
                     if self.checkForInduction(fi):
                         print("Fond inductive invariant:\n" + str(fi.cube()))
                         return True
@@ -138,7 +137,7 @@ class PDR:
                 Q.pop()
                 s = self.MIC(s)
                 for i in range(1, s.t + 1):
-                    self.R[i].add(Not(s.cube()))
+                    self.frames[i].add(Not(s.cube()))
             else:
                 Q.append(z)
         return None
@@ -165,12 +164,12 @@ class PDR:
         while True:
             s = Solver()
             s.push()
-            s.add(And(self.R[0].cube(), Not(q.cube())))
+            s.add(And(self.frames[0].cube(), Not(q.cube())))
             if unsat == s.check():
                 return False
             s.pop()
             s.push()
-            s.add(And(self.R[q.t].cube(), Not(q.cube()), self.trans.cube(),
+            s.add(And(self.frames[q.t].cube(), Not(q.cube()), self.trans.cube(),
                       substitute(q.cube(), self.primeMap)))  # Fi and not(q) and T and q'
             if unsat == s.check():
                 return True
@@ -206,7 +205,7 @@ class PDR:
     def solveRelative(self, tcube):
         cubePrime = substitute(tcube.cube(), self.primeMap)
         s = Solver()
-        s.add(self.R[tcube.t - 1].cube())
+        s.add(self.frames[tcube.t - 1].cube())
         s.add(self.trans.cube())
         s.add(Not(tcube.cube()))
         s.add(cubePrime)  # F[i - 1] and T and Not(badCube) and badCube'
@@ -219,11 +218,11 @@ class PDR:
 
     def getBadCube(self):
         print("seek for bad cube...")
-        model = And(Not(self.post.cube()), self.R[-1].cube())  # F[k] and Not(p)
+        model = And(Not(self.post.cube()), self.frames[-1].cube())  # F[k] and Not(p)
         s = Solver()
         s.add(model)
         if s.check() == sat:
-            res = tCube(len(self.R) - 1)
+            res = tCube(len(self.frames) - 1)
             res.addModel(self.lMap, s.model())  # res = sat_model
             return res
         else:
