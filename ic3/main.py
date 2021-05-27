@@ -3,8 +3,9 @@ import os
 from datetime import datetime
 from multiprocessing import Process
 
-import ic3.pdr
 import ic3.model
+import ic3.pdr
+
 
 test_file_path = "./aag"
 

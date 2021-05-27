@@ -16,7 +16,8 @@ class tCube:
 
     # 扩增 CNF 式
     def addAnds(self, ms):
-        self.cubeLiterals.extend(ms)
+        for i in ms:
+            self.add(i)
 
     # 增加一个公式到当前 tCube() 中
     def add(self, m):
@@ -31,11 +32,11 @@ class tCube:
     # 删除第 i 个元素，并返回 tCube
     def delete(self, i: int):
         res = tCube(self.t)
-        for it in range(len(self.cubeLiterals)):
-            if it == i:
+        for it, v in enumerate(self.cubeLiterals):
+            if i == it:
                 res.add(True)
                 continue
-            res.add(self.cubeLiterals[it])
+            res.add(v)
         return res
 
     def cube(self):
@@ -45,31 +46,31 @@ class tCube:
         return str(self.t) + ": " + str(sorted(self.cubeLiterals, key=str))
 
 
-class tClause:
-    def __init__(self, t=0):
-        self.t = t
-        self.clauseLiterals = []
-
-    def defFromNotCube(self, c: tCube):
-        for cube in c.cubeLiterals:
-            self.clauseLiterals.append(Not(cube))
-
-    def clause(self):
-        return simplify(Or(self.clauseLiterals))
-
-    def add(self, m):
-        self.clauseLiterals.append(m)
-
-    def delete(self, i: int):
-        res = tClause(self.t)
-        for it in range(len(self.clauseLiterals)):
-            if it == i:
-                continue
-            res.add(self.clauseLiterals[it])
-        return res
-
-    def __repr__(self):
-        return str(self.t) + ": " + str(sorted(self.clauseLiterals, key=str))
+# class tClause:
+#     def __init__(self, t=0):
+#         self.t = t
+#         self.clauseLiterals = []
+#
+#     def defFromNotCube(self, c: tCube):
+#         for cube in c.cubeLiterals:
+#             self.clauseLiterals.append(Not(cube))
+#
+#     def clause(self):
+#         return simplify(Or(self.clauseLiterals))
+#
+#     def add(self, m):
+#         self.clauseLiterals.append(m)
+#
+#     def delete(self, i: int):
+#         res = tClause(self.t)
+#         for it in range(len(self.clauseLiterals)):
+#             if it == i:
+#                 continue
+#             res.add(self.clauseLiterals[it])
+#         return res
+#
+#     def __repr__(self):
+#         return str(self.t) + ": " + str(sorted(self.clauseLiterals, key=str))
 
 
 class PDR:
@@ -83,6 +84,12 @@ class PDR:
         self.post = post
         self.frames = list()
         self.primeMap = [(literals[i], primes[i]) for i in range(len(literals))]
+        # print("init:")
+        # print(self.init.cube())
+        # print("trans...")
+        # print(self.trans.cube())
+        # print("post:")
+        # print(self.post.cube())
 
     def run(self):
         self.frames = list()

@@ -2,6 +2,7 @@ import re
 from z3 import *
 
 from ic3.pdr import tCube
+from ic3.solver import TCube
 
 
 class Header:
@@ -322,15 +323,18 @@ class Model:
             else:
                 it = str(int(it) - 1)
                 if it in inp.keys():
-                    property_items.append(inp[it])
+                    property_items.append(Not(inp[it]))
                 elif it in vs.keys():
-                    property_items.append(vs[it])
+                    property_items.append(Not(vs[it]))
                 elif it in ands.keys():
-                    property_items.append(ands[it])
+                    property_items.append(Not(ands[it]))
                 else:
                     print("Error in property definition")
                     exit(1)
+        # print("postadd")
         self.post.addAnds(property_items)
+        # self.post.add(Or(vs['54'], vs['66'], Not(vs['68']), Not(vs['56'])))
+        # print("postAdded")
         return self.inputs, self.vars, self.primed_vars, self.init, self.trans, self.post
 
 
